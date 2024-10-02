@@ -1,2 +1,2 @@
 # serverless_arch_HV_assignment
-For Serverless Architecture Assignment from Herovired
+This repo has the evidences for Serverless Architecture Assignment from Herovired
