@@ -1,0 +1,59 @@
+import boto3
+from datetime import datetime, timezone, timedelta
+
+# Initialize the EC2 client
+ec2 = boto3.client('ec2')
+
+# EBS Volume ID
+VOLUME_ID = 'vol-0c37fabae8674b073'
+
+# Time delta for 30 days
+DAYS_OLD = 30
+now = datetime.now(timezone.utc)
+cutoff_date = now - timedelta(days=DAYS_OLD)
+
+def create_snapshot():
+    # Create a snapshot for the specified volume
+    response = ec2.create_snapshot(VolumeId=VOLUME_ID, Description="Snapshot for EBS volume")
+    
+    # Get the snapshot ID
+    snapshot_id = response['SnapshotId']
+    
+    # Log the created snapshot ID
+    print(f"Created snapshot: {snapshot_id}")
+    
+    return snapshot_id
+
+def delete_old_snapshots():
+    # Filter snapshots by volume and created by the user (to avoid deleting system snapshots)
+    response = ec2.describe_snapshots(
+        Filters=[
+            {'Name': 'volume-id', 'Values': [VOLUME_ID]},
+            {'Name': 'owner-id', 'Values': ['self']}  # Only own snapshots
+        ]
+    )
+
+    deleted_snapshots = []
+    
+    for snapshot in response['Snapshots']:
+        snapshot_id = snapshot['SnapshotId']
+        start_time = snapshot['StartTime']
+        
+        # If the snapshot is older than the cutoff date
+        if start_time < cutoff_date:
+            print(f"Deleting snapshot: {snapshot_id} (Created on {start_time})")
+            ec2.delete_snapshot(SnapshotId=snapshot_id)
+            deleted_snapshots.append(snapshot_id)
+
+    # Log the deleted snapshot IDs
+    if deleted_snapshots:
+        print(f"Deleted snapshots: {deleted_snapshots}")
+    else:
+        print("No snapshots older than 30 days found.")
+
+def lambda_handler(event, context):
+    # Step 1: Create a new snapshot
+    created_snapshot_id = create_snapshot()
+
+    # Step 2: Delete old snapshots older than 30 days
+    delete_old_snapshots()
